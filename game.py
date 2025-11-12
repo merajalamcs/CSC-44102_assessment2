@@ -1,3 +1,4 @@
+
 import tkinter as tk
 import random
 from dataclasses import dataclass
@@ -21,7 +22,7 @@ class SnakeGame:
         self.root.title("Snake Game - CSC-44102")
         self.root.resizable(False, False)
 
-        # ---- Status bar (before canvas) ----
+        # ---- Status bar ----
         self.top = tk.Frame(root, bg=BG)
         self.top.pack(fill=tk.X)
         self.score = 0
@@ -52,7 +53,7 @@ class SnakeGame:
         # Spawn first food
         self.food = self.spawn_food()
 
-        # --- NEW: alive flag for game-over flow ---
+        # Alive flag for game-over flow
         self.alive = True
 
         # Key bindings
@@ -60,7 +61,6 @@ class SnakeGame:
         self.root.bind("<Down>",  lambda e: self.set_dir(0,  1))
         self.root.bind("<Left>",  lambda e: self.set_dir(-1, 0))
         self.root.bind("<Right>", lambda e: self.set_dir(1,  0))
-        # (We’ll add Space to pause and R to restart in a later small commit)
 
         # Start loop
         self.loop()
@@ -83,7 +83,7 @@ class SnakeGame:
         # red-500
         self.draw_cell(self.food, "#ef4444")
 
-    # ---- Game over (NEW) ----
+    # ---- Game over ----
     def game_over(self, reason: str):
         self.alive = False
         self.msg_var.set(f"Game over: {reason} • Press R to restart")
@@ -95,9 +95,8 @@ class SnakeGame:
                             text=f"Score: {self.score}  •  Press R to restart",
                             fill=TEXT, font=("Segoe UI", 14))
 
-    # ---- Game step (UPDATED) ----
+    # ---- Game step (UPDATED with self-collision) ----
     def step(self):
-        # stop updating if dead
         if not self.alive:
             return
 
@@ -105,9 +104,14 @@ class SnakeGame:
         head = self.snake[0]
         new_head = Point(head.x + self.dir.x, head.y + self.dir.y)
 
-        # --- NEW: Wall collision instead of wrapping ---
+        # Wall collision instead of wrapping
         if not (0 <= new_head.x < self.grid_w and 0 <= new_head.y < self.grid_h):
             self.game_over("Hit the wall!")
+            return
+
+        # ---- NEW: self-collision check ----
+        if any(seg.x == new_head.x and seg.y == new_head.y for seg in self.snake):
+            self.game_over("Ran into yourself!")
             return
 
         # proceed with movement
@@ -146,7 +150,7 @@ class SnakeGame:
         for seg in self.snake:
             self.draw_cell(seg, "#10b981")  # emerald-500
 
-    # ---- Labels helper ----
+   
     def update_labels(self):
         self.score_var.set(f"Score: {self.score}")
 
