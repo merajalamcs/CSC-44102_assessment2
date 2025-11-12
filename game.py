@@ -1,4 +1,3 @@
-
 import tkinter as tk
 import random
 from dataclasses import dataclass
@@ -8,6 +7,13 @@ WIDTH, HEIGHT = 600, 400
 CELL_SIZE = 20
 GRID = "#1f2937"
 TEXT = "#e5e7eb"  # for status bar text
+
+# --- NEW: speed + color constants ---
+SPEED_MS = 120
+SPEED_UP_EVERY = 5
+SPEED_DELTA = -5
+SNAKE = "#10b981"
+FOOD = "#ef4444"
 
 
 @dataclass
@@ -19,7 +25,7 @@ class Point:
 class SnakeGame:
     def __init__(self, root: tk.Tk):
         self.root = root
-        self.root.title("Snake Game - CSC-44102")
+        self.root.title("Snake Game - CSC-44102 - Assesment 2")
         self.root.resizable(False, False)
 
         # ---- Status bar (before canvas) ----
@@ -40,30 +46,29 @@ class SnakeGame:
         self.cv.pack()
         self.draw_grid()
 
-        # Grid dims + initial snake setup will be done in reset()
+        # Grid dims
+        self.grid_w = WIDTH // CELL_SIZE
+        self.grid_h = HEIGHT // CELL_SIZE
 
-        # Direction state (initial values; will be re-set in reset())
+        # Direction state (initial placeholders; real init in reset())
         self.dir = Point(1, 0)
         self.pending_dir = self.dir
 
-        # Alive flag and pause flag
+        # Alive/pause flags
         self.alive = True
-        self.paused = False  # <-- NEW
+        self.paused = False
 
         # Key bindings
         self.root.bind("<Up>",    lambda e: self.set_dir(0, -1))
         self.root.bind("<Down>",  lambda e: self.set_dir(0,  1))
         self.root.bind("<Left>",  lambda e: self.set_dir(-1, 0))
         self.root.bind("<Right>", lambda e: self.set_dir(1,  0))
-        # NEW: Pause/Restart bindings
         self.root.bind("<space>", lambda e: self.toggle_pause())
         self.root.bind("<r>",     lambda e: self.restart())
         self.root.bind("<R>",     lambda e: self.restart())
 
-        # Prepare grid dims then full reset to initialize everything
-        self.grid_w = WIDTH // CELL_SIZE
-        self.grid_h = HEIGHT // CELL_SIZE
-        self.reset()  # <-- NEW: initialize snake, food, score, flags
+        # Initialize all runtime state (snake, food, score, tick, etc.)
+        self.reset()
 
         # Start loop
         self.loop()
@@ -75,7 +80,7 @@ class SnakeGame:
             return
         self.pending_dir = Point(dx, dy)
 
-    # ---- Lifecycle helpers (NEW) ----
+    # ---- Lifecycle helpers ----
     def reset(self):
         mid = Point(self.grid_w // 2, self.grid_h // 2)
         self.snake = [Point(mid.x, mid.y), Point(mid.x - 1, mid.y), Point(mid.x - 2, mid.y)]
@@ -85,6 +90,11 @@ class SnakeGame:
         self.score = 0
         self.alive = True
         self.paused = False
+
+        # speed management state 
+        self.tick = SPEED_MS
+        self.foods_eaten = 0
+
         self.msg_var.set("Arrow keys to move • Space: Pause • R: Restart")
 
     def restart(self):
@@ -110,7 +120,8 @@ class SnakeGame:
         return Point(x, y)
 
     def draw_food(self):
-        self.draw_cell(self.food, "#ef4444")  # red-500
+        # use constant color
+        self.draw_cell(self.food, FOOD)
 
     # ---- Game over ----
     def game_over(self, reason: str):
@@ -124,9 +135,9 @@ class SnakeGame:
                             text=f"Score: {self.score}  •  Press R to restart",
                             fill=TEXT, font=("Segoe UI", 14))
 
-    # ---- Game step (with pause & alive checks) ----
+    # ---- Game step (with speed-up) ----
     def step(self):
-        # Early exit if dead or paused  <-- NEW
+        # Early exit if dead or paused
         if not self.alive or self.paused:
             return
 
@@ -139,7 +150,7 @@ class SnakeGame:
             self.game_over("Hit the wall!")
             return
 
-        # Self-collision check
+        # Self-collision
         if any(seg.x == new_head.x and seg.y == new_head.y for seg in self.snake):
             self.game_over("Ran into yourself!")
             return
@@ -147,14 +158,18 @@ class SnakeGame:
         # proceed with movement
         self.snake.insert(0, new_head)
 
-        # Eat / grow + scoring
+        # Eat / grow + scoring + speed adjustments
         if new_head.x == self.food.x and new_head.y == self.food.y:
             self.score += 10
+            self.foods_eaten += 1
+            # --- NEW: speed up every N foods, keep a safe lower bound ~40ms
+            if self.foods_eaten % SPEED_UP_EVERY == 0 and self.tick + SPEED_DELTA >= 40:
+                self.tick += SPEED_DELTA
             self.food = self.spawn_food()
         else:
             self.snake.pop()
 
-    # ---- Main loop ----
+    # ---- Main loop (dynamic tick) ----
     def loop(self):
         self.cv.delete("all")
         self.draw_grid()
@@ -162,7 +177,8 @@ class SnakeGame:
         self.draw_food()
         self.draw_snake()
         self.update_labels()
-        self.root.after(150, self.loop)
+        # use dynamic tick
+        self.root.after(self.tick, self.loop)
 
     # ---- Drawing helpers ----
     def draw_grid(self):
@@ -171,16 +187,21 @@ class SnakeGame:
         for y in range(0, HEIGHT, CELL_SIZE):
             self.cv.create_line(0, y, WIDTH, y, fill=GRID)
 
-    def draw_cell(self, p: Point, color: str):
-        x0, y0 = p.x * CELL_SIZE, p.y * CELL_SIZE
-        x1, y1 = x0 + CELL_SIZE, y0 + CELL_SIZE
+    # --- NEW: rounded look via inner rectangle outline ---
+    def draw_cell(self, p: Point, color: str, radius: int = 2):
+        x0 = p.x * CELL_SIZE
+        y0 = p.y * CELL_SIZE
+        x1 = x0 + CELL_SIZE
+        y1 = y0 + CELL_SIZE
         self.cv.create_rectangle(x0, y0, x1, y1, fill=color, outline=BG)
+        pad = max(0, radius)
+        self.cv.create_rectangle(x0 + pad, y0 + pad, x1 - pad, y1 - pad, outline=color)
 
     def draw_snake(self):
-        for seg in self.snake:
-            self.draw_cell(seg, "#10b981")  # emerald-500
+        for i, seg in enumerate(self.snake):
+            self.draw_cell(seg, SNAKE, radius=4 if i == 0 else 2)
 
-    # ---- Labels helper ----
+  
     def update_labels(self):
         self.score_var.set(f"Score: {self.score}")
 
