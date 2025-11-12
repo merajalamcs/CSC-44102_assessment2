@@ -6,6 +6,7 @@ BG = "#111827"
 WIDTH, HEIGHT = 600, 400
 CELL_SIZE = 20
 GRID = "#1f2937"
+TEXT = "#e5e7eb"  # <-- NEW: text colour for status bar
 
 
 @dataclass
@@ -19,6 +20,19 @@ class SnakeGame:
         self.root = root
         self.root.title("Snake Game - CSC-44102")
         self.root.resizable(False, False)
+
+        # ---- NEW: Status bar (placed BEFORE creating the canvas) ----
+        self.top = tk.Frame(root, bg=BG)
+        self.top.pack(fill=tk.X)
+        self.score = 0
+        self.score_var = tk.StringVar(value="Score: 0")
+        self.msg_var = tk.StringVar(value="Arrow keys to move")
+        tk.Label(self.top, textvariable=self.score_var, fg=TEXT, bg=BG, font=("Segoe UI", 12)).pack(
+            side=tk.LEFT, padx=8, pady=6
+        )
+        tk.Label(self.top, textvariable=self.msg_var, fg=TEXT, bg=BG, font=("Segoe UI", 10)).pack(
+            side=tk.RIGHT, padx=8
+        )
 
         # Canvas
         self.cv = tk.Canvas(root, width=WIDTH, height=HEIGHT, bg=BG, highlightthickness=0)
@@ -35,10 +49,10 @@ class SnakeGame:
         self.dir = Point(1, 0)            # moving right
         self.pending_dir = self.dir
 
-        # --- NEW: spawn first food ---
+        # Spawn first food
         self.food = self.spawn_food()
 
-        # Key bindings (use real angle brackets)
+        # Key bindings
         self.root.bind("<Up>",    lambda e: self.set_dir(0, -1))
         self.root.bind("<Down>",  lambda e: self.set_dir(0,  1))
         self.root.bind("<Left>",  lambda e: self.set_dir(-1, 0))
@@ -54,7 +68,7 @@ class SnakeGame:
             return
         self.pending_dir = Point(dx, dy)
 
-    # ---- Food helpers (NEW) ----
+    # ---- Food helpers ----
     def spawn_food(self) -> Point:
         occupied = {(p.x, p.y) for p in self.snake}
         free = [(x, y) for x in range(self.grid_w) for y in range(self.grid_h) if (x, y) not in occupied]
@@ -64,6 +78,10 @@ class SnakeGame:
     def draw_food(self):
         # red-500
         self.draw_cell(self.food, "#ef4444")
+
+    # ---- Score/labels helper (NEW) ----
+    def update_labels(self):
+        self.score_var.set(f"Score: {self.score}")
 
     # ---- Game step ----
     def step(self):
@@ -77,12 +95,11 @@ class SnakeGame:
 
         self.snake.insert(0, new_head)
 
-        # --- NEW: eat / grow logic ---
+        # Eat / grow + scoring (UPDATED)
         if new_head.x == self.food.x and new_head.y == self.food.y:
-            # keep grown (no pop) and respawn food
+            self.score += 10            # <-- NEW: increase score
             self.food = self.spawn_food()
         else:
-            # normal move: remove tail
             self.snake.pop()
 
     # ---- Main loop ----
@@ -90,9 +107,9 @@ class SnakeGame:
         self.cv.delete("all")
         self.draw_grid()
         self.step()
-        # --- NEW: draw food each frame ---
         self.draw_food()
         self.draw_snake()
+        self.update_labels()  # <-- NEW: refresh score label every frame
         self.root.after(150, self.loop)
 
     # ---- Drawing helpers ----
