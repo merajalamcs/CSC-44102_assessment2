@@ -22,7 +22,7 @@ class SnakeGame:
         self.root.title("Snake Game - CSC-44102")
         self.root.resizable(False, False)
 
-        # ---- Status bar ----
+        # ---- Status bar (before canvas) ----
         self.top = tk.Frame(root, bg=BG)
         self.top.pack(fill=tk.X)
         self.score = 0
@@ -40,27 +40,30 @@ class SnakeGame:
         self.cv.pack()
         self.draw_grid()
 
-        # Grid dims + initial snake
-        self.grid_w = WIDTH // CELL_SIZE
-        self.grid_h = HEIGHT // CELL_SIZE
-        mid = Point(self.grid_w // 2, self.grid_h // 2)
-        self.snake = [Point(mid.x, mid.y), Point(mid.x - 1, mid.y), Point(mid.x - 2, mid.y)]
+        # Grid dims + initial snake setup will be done in reset()
 
-        # Direction state
-        self.dir = Point(1, 0)            # moving right
+        # Direction state (initial values; will be re-set in reset())
+        self.dir = Point(1, 0)
         self.pending_dir = self.dir
 
-        # Spawn first food
-        self.food = self.spawn_food()
-
-        # Alive flag for game-over flow
+        # Alive flag and pause flag
         self.alive = True
+        self.paused = False  # <-- NEW
 
         # Key bindings
         self.root.bind("<Up>",    lambda e: self.set_dir(0, -1))
         self.root.bind("<Down>",  lambda e: self.set_dir(0,  1))
         self.root.bind("<Left>",  lambda e: self.set_dir(-1, 0))
         self.root.bind("<Right>", lambda e: self.set_dir(1,  0))
+        # NEW: Pause/Restart bindings
+        self.root.bind("<space>", lambda e: self.toggle_pause())
+        self.root.bind("<r>",     lambda e: self.restart())
+        self.root.bind("<R>",     lambda e: self.restart())
+
+        # Prepare grid dims then full reset to initialize everything
+        self.grid_w = WIDTH // CELL_SIZE
+        self.grid_h = HEIGHT // CELL_SIZE
+        self.reset()  # <-- NEW: initialize snake, food, score, flags
 
         # Start loop
         self.loop()
@@ -72,6 +75,33 @@ class SnakeGame:
             return
         self.pending_dir = Point(dx, dy)
 
+    # ---- Lifecycle helpers (NEW) ----
+    def reset(self):
+        mid = Point(self.grid_w // 2, self.grid_h // 2)
+        self.snake = [Point(mid.x, mid.y), Point(mid.x - 1, mid.y), Point(mid.x - 2, mid.y)]
+        self.dir = Point(1, 0)
+        self.pending_dir = self.dir
+        self.food = self.spawn_food()
+        self.score = 0
+        self.alive = True
+        self.paused = False
+        self.msg_var.set("Arrow keys to move • Space: Pause • R: Restart")
+
+    def restart(self):
+        if not self.alive:
+            self.msg_var.set("Restarted. Arrow keys to move • Space: Pause")
+        self.reset()
+
+    def toggle_pause(self):
+        if not self.alive:
+            return
+        self.paused = not self.paused
+        self.msg_var.set(
+            "Paused. Press Space to resume"
+            if self.paused
+            else "Arrow keys to move • Space: Pause • R: Restart"
+        )
+
     # ---- Food helpers ----
     def spawn_food(self) -> Point:
         occupied = {(p.x, p.y) for p in self.snake}
@@ -80,8 +110,7 @@ class SnakeGame:
         return Point(x, y)
 
     def draw_food(self):
-        # red-500
-        self.draw_cell(self.food, "#ef4444")
+        self.draw_cell(self.food, "#ef4444")  # red-500
 
     # ---- Game over ----
     def game_over(self, reason: str):
@@ -95,9 +124,10 @@ class SnakeGame:
                             text=f"Score: {self.score}  •  Press R to restart",
                             fill=TEXT, font=("Segoe UI", 14))
 
-    # ---- Game step (UPDATED with self-collision) ----
+    # ---- Game step (with pause & alive checks) ----
     def step(self):
-        if not self.alive:
+        # Early exit if dead or paused  <-- NEW
+        if not self.alive or self.paused:
             return
 
         self.dir = self.pending_dir
@@ -109,7 +139,7 @@ class SnakeGame:
             self.game_over("Hit the wall!")
             return
 
-        # ---- NEW: self-collision check ----
+        # Self-collision check
         if any(seg.x == new_head.x and seg.y == new_head.y for seg in self.snake):
             self.game_over("Ran into yourself!")
             return
@@ -150,7 +180,7 @@ class SnakeGame:
         for seg in self.snake:
             self.draw_cell(seg, "#10b981")  # emerald-500
 
-   
+    # ---- Labels helper ----
     def update_labels(self):
         self.score_var.set(f"Score: {self.score}")
 
