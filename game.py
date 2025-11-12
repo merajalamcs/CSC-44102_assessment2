@@ -6,7 +6,7 @@ BG = "#111827"
 WIDTH, HEIGHT = 600, 400
 CELL_SIZE = 20
 GRID = "#1f2937"
-TEXT = "#e5e7eb"  # <-- NEW: text colour for status bar
+TEXT = "#e5e7eb"  # for status bar text
 
 
 @dataclass
@@ -21,7 +21,7 @@ class SnakeGame:
         self.root.title("Snake Game - CSC-44102")
         self.root.resizable(False, False)
 
-        # ---- NEW: Status bar (placed BEFORE creating the canvas) ----
+        # ---- Status bar (before canvas) ----
         self.top = tk.Frame(root, bg=BG)
         self.top.pack(fill=tk.X)
         self.score = 0
@@ -52,11 +52,15 @@ class SnakeGame:
         # Spawn first food
         self.food = self.spawn_food()
 
+        # --- NEW: alive flag for game-over flow ---
+        self.alive = True
+
         # Key bindings
         self.root.bind("<Up>",    lambda e: self.set_dir(0, -1))
         self.root.bind("<Down>",  lambda e: self.set_dir(0,  1))
         self.root.bind("<Left>",  lambda e: self.set_dir(-1, 0))
         self.root.bind("<Right>", lambda e: self.set_dir(1,  0))
+        # (We’ll add Space to pause and R to restart in a later small commit)
 
         # Start loop
         self.loop()
@@ -79,25 +83,39 @@ class SnakeGame:
         # red-500
         self.draw_cell(self.food, "#ef4444")
 
-    # ---- Score/labels helper (NEW) ----
-    def update_labels(self):
-        self.score_var.set(f"Score: {self.score}")
+    # ---- Game over (NEW) ----
+    def game_over(self, reason: str):
+        self.alive = False
+        self.msg_var.set(f"Game over: {reason} • Press R to restart")
+        # Overlay
+        self.cv.create_rectangle(0, 0, WIDTH, HEIGHT, fill="#000000", stipple="gray50", outline="")
+        self.cv.create_text(WIDTH // 2, HEIGHT // 2 - 10, text="GAME OVER",
+                            fill=TEXT, font=("Segoe UI", 24, "bold"))
+        self.cv.create_text(WIDTH // 2, HEIGHT // 2 + 20,
+                            text=f"Score: {self.score}  •  Press R to restart",
+                            fill=TEXT, font=("Segoe UI", 14))
 
-    # ---- Game step ----
+    # ---- Game step (UPDATED) ----
     def step(self):
+        # stop updating if dead
+        if not self.alive:
+            return
+
         self.dir = self.pending_dir
         head = self.snake[0]
         new_head = Point(head.x + self.dir.x, head.y + self.dir.y)
 
-        # temporary wrap; you can replace with wall collision later
-        new_head.x %= self.grid_w
-        new_head.y %= self.grid_h
+        # --- NEW: Wall collision instead of wrapping ---
+        if not (0 <= new_head.x < self.grid_w and 0 <= new_head.y < self.grid_h):
+            self.game_over("Hit the wall!")
+            return
 
+        # proceed with movement
         self.snake.insert(0, new_head)
 
-        # Eat / grow + scoring (UPDATED)
+        # Eat / grow + scoring
         if new_head.x == self.food.x and new_head.y == self.food.y:
-            self.score += 10            # <-- NEW: increase score
+            self.score += 10
             self.food = self.spawn_food()
         else:
             self.snake.pop()
@@ -109,7 +127,7 @@ class SnakeGame:
         self.step()
         self.draw_food()
         self.draw_snake()
-        self.update_labels()  # <-- NEW: refresh score label every frame
+        self.update_labels()
         self.root.after(150, self.loop)
 
     # ---- Drawing helpers ----
@@ -127,6 +145,10 @@ class SnakeGame:
     def draw_snake(self):
         for seg in self.snake:
             self.draw_cell(seg, "#10b981")  # emerald-500
+
+    # ---- Labels helper ----
+    def update_labels(self):
+        self.score_var.set(f"Score: {self.score}")
 
 
 def main():
